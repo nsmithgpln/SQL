@@ -1,0 +1,74 @@
+This SQL query identifies and compares customer activity in the top 10 countries by customer count using a common table expression.
+
+1. TopCountries: Finds the top 10 countries with the most customers.
+2. FilteredCities: Filters cities within those top 10 countries, selecting the top 10 cities by customer count.
+3. TopCustomers: Identifies the top 5 customers (by total payment) in those cities.
+4. TotalCustomers: Counts all unique customers in each country.
+5. Final SELECT: Compares the count of top-paying customers to the total customer count in each country.
+
+The result shows the number of top customers and the total customers in each of the top countries.
+
+WITH TopCountries AS (
+    SELECT 
+        country.country_id
+    FROM 
+        customer
+    JOIN address ON customer.address_id = address.address_id
+    JOIN city ON address.city_id = city.city_id
+    JOIN country ON city.country_id = country.country_id
+    GROUP BY country.country_id
+    ORDER BY COUNT(customer.customer_id) DESC
+    LIMIT 10
+),
+FilteredCities AS (
+    SELECT
+        city.city_id,
+        city.city,
+        country.country_id,
+        country.country,
+        customer.customer_id
+    FROM
+        customer
+    JOIN address ON customer.address_id = address.address_id
+    JOIN city ON address.city_id = city.city_id
+    JOIN country ON city.country_id = country.country_id
+    WHERE country.country_id IN (SELECT country_id FROM TopCountries)
+    GROUP BY city.city_id, city.city, country.country_id, country.country, customer.customer_id
+    ORDER BY COUNT(customer.customer_id) DESC
+    LIMIT 10
+),
+TopCustomers AS (
+    SELECT
+        filteredCities.country,
+        filteredCities.customer_id,
+        SUM(payment.amount) AS total_payment
+    FROM 
+        FilteredCities
+    JOIN payment ON filteredCities.customer_id = payment.customer_id
+    GROUP BY filteredCities.country, filteredCities.customer_id
+    ORDER BY total_payment DESC
+    LIMIT 5
+),
+TotalCustomers AS (
+    SELECT
+        country.country,
+        COUNT(DISTINCT customer.customer_id) AS all_customer_count
+    FROM
+        customer
+    JOIN address ON customer.address_id = address.address_id
+    JOIN city ON address.city_id = city.city_id
+    JOIN country ON city.country_id = country.country_id
+    GROUP BY country.country
+)
+SELECT
+    topCustomers.country,
+    COUNT(DISTINCT topCustomers.customer_id) AS top_customer_count,
+    totalCustomers.all_customer_count
+FROM 
+    TopCustomers AS topCustomers
+JOIN 
+    TotalCustomers AS totalCustomers
+ON 
+    topCustomers.country = totalCustomers.country
+GROUP BY 
+    topCustomers.country, totalCustomers.all_customer_count;
